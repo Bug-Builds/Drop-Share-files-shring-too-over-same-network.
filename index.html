@@ -145,7 +145,8 @@ const IC = {
   laptop: sv('<rect x="3.5" y="4.5" width="17" height="11" rx="2"/><path d="M2 19.5h20"/>'),
   chk: '<svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>',
 };
-const CHUNK = 16384, HIGH = 4 << 20;
+let CHUNK = 16384;               // raised to 64 KB on open when the other browser allows it
+const HIGH = 8 << 20, BLOCK = 1 << 20;
 const size = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
 const fail = (m) => { $('#err').textContent = m || ''; };
 let peer, conn, dc, cur = null;
@@ -184,7 +185,9 @@ function waiting(on) { $('#peerNode').classList.toggle('wait', on); }
 function attach(c) {
   conn = c;
   c.on('open', () => {
-    dc = c.dataChannel; dc.bufferedAmountLowThreshold = 1 << 20;
+    dc = c.dataChannel; dc.bufferedAmountLowThreshold = 2 << 20;
+    const mm = c.peerConnection && c.peerConnection.sctp && c.peerConnection.sctp.maxMessageSize;
+    CHUNK = Math.min(65536, mm || 16384);
     $('#pair').hidden = true; $('#app').hidden = false; waiting(false);
     stage.classList.add('live', 'boom'); $('#peerNode').classList.remove('ghost');
     $('#pill').textContent = 'Connected'; $('#pill').className = 'pill on';
@@ -269,10 +272,13 @@ async function sendFiles(files) {
     flow('out', 1);
     try {
       dc.send(JSON.stringify({ t: 'file-start', name: f.name, size: f.size, type: f.type }));
-      for (let o = 0; o < f.size; o += CHUNK) {
-        if (dc.bufferedAmount > HIGH) await new Promise((res) => dc.addEventListener('bufferedamountlow', res, { once: true }));
-        dc.send(await f.slice(o, o + CHUNK).arrayBuffer());
-        const b = Math.min(o + CHUNK, f.size); it.set(b, rate(t0, b, f.size));
+      for (let o = 0; o < f.size; o += BLOCK) {
+        const block = await f.slice(o, o + BLOCK).arrayBuffer();   // one disk read per 1 MB
+        for (let p = 0; p < block.byteLength; p += CHUNK) {
+          if (dc.bufferedAmount > HIGH) await new Promise((res) => dc.addEventListener('bufferedamountlow', res, { once: true }));
+          dc.send(new Uint8Array(block, p, Math.min(CHUNK, block.byteLength - p)));   // view, no copy
+        }
+        const b = Math.min(o + BLOCK, f.size); it.set(b, rate(t0, b, f.size));
       }
       dc.send(JSON.stringify({ t: 'file-end' }));
       while (dc.bufferedAmount > 0) await new Promise((res) => setTimeout(res, 50));

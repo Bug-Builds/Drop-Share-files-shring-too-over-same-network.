@@ -145,8 +145,68 @@ const IC = {
   laptop: sv('<rect x="3.5" y="4.5" width="17" height="11" rx="2"/><path d="M2 19.5h20"/>'),
   chk: '<svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>',
 };
-let CHUNK = 16384;               // raised to 64 KB on open when the other browser allows it
-const HIGH = 8 << 20, BLOCK = 1 << 20;
+// Faster transfer engine: read disk in 2 MiB slabs, then send adaptive WebRTC packets.
+// Small packets remain available for browsers with conservative SCTP message limits.
+const READ_BATCH = 2 << 20, MAX_CHUNK = 64 << 10;
+const BUFFER_HIGH = 8 << 20, BUFFER_LOW = 2 << 20;
+const legacyWebKit = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Edg/.test(navigator.userAgent));
+const myChunkLimit = legacyWebKit ? 16 << 10 : MAX_CHUNK;
+let remoteChunkLimit = 16 << 10; // Conservative until the second device says what it supports.
+function chunkSize() {
+  const maxSctp = conn?.peerConnection?.sctp?.maxMessageSize;
+  return Math.min(myChunkLimit, remoteChunkLimit,
+    Number.isFinite(maxSctp) && maxSctp > 0 ? maxSctp : MAX_CHUNK);
+}
+// Wait for the browser's outgoing buffer to clear. Poll fallback prevents missing a low-buffer event.
+function waitForBuffer() {
+  const channel = dc;
+  return new Promise((resolve, reject) => {
+    let timer;
+    function cleanup() {
+      channel.removeEventListener('bufferedamountlow', check);
+      channel.removeEventListener('close', closed);
+      clearInterval(timer);
+    }
+    function closed() { cleanup(); reject(new Error('Device disconnected during transfer')); }
+    function check() {
+      if (channel.readyState !== 'open') return closed();
+      if (channel.bufferedAmount <= BUFFER_LOW) { cleanup(); resolve(); }
+    }
+    channel.addEventListener('bufferedamountlow', check);
+    channel.addEventListener('close', closed);
+    timer = setInterval(check, 80);
+    check();
+  });
+}
+async function waitForDrain() {
+  while (dc?.bufferedAmount > 0) {
+    if (dc.readyState !== 'open') throw new Error('Device disconnected during transfer');
+    await new Promise(resolve => setTimeout(resolve, 35));
+  }
+  if (dc?.readyState !== 'open') throw new Error('Device disconnected during transfer');
+}
+// Only label a connection Direct/Relay when browser stats positively identify its route.
+async function identifyRoute(c) {
+  try {
+    const pc = c.peerConnection;
+    if (!pc?.getStats) return;
+    const report = await pc.getStats();
+    let pair;
+    for (const stat of report.values()) {
+      if (stat.type === 'transport' && stat.selectedCandidatePairId) pair = report.get(stat.selectedCandidatePairId);
+    }
+    if (!pair) for (const stat of report.values()) {
+      if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && (stat.nominated || stat.selected)) { pair = stat; break; }
+    }
+    if (!pair || conn !== c || dc?.readyState !== 'open') return;
+    const local = report.get(pair.localCandidateId), remote = report.get(pair.remoteCandidateId);
+    if (!local?.candidateType || !remote?.candidateType) return;
+    const relay = local.candidateType === 'relay' || remote.candidateType === 'relay';
+    $('#pill').textContent = relay ? 'Connected · Relayed' : 'Connected · Direct';
+    $('#pill').title = relay ? 'Traffic is passing through a relay; speed may be lower.' : 'Devices have a direct WebRTC connection.';
+  } catch (_) { /* Connection stats are not implemented uniformly on all browsers. */ }
+}
 const size = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
 const fail = (m) => { $('#err').textContent = m || ''; };
 let peer, conn, dc, cur = null;
@@ -185,14 +245,14 @@ function waiting(on) { $('#peerNode').classList.toggle('wait', on); }
 function attach(c) {
   conn = c;
   c.on('open', () => {
-    dc = c.dataChannel; dc.bufferedAmountLowThreshold = 2 << 20;
-    const mm = c.peerConnection && c.peerConnection.sctp && c.peerConnection.sctp.maxMessageSize;
-    CHUNK = Math.min(65536, mm || 16384);
+    dc = c.dataChannel; dc.binaryType = 'arraybuffer'; dc.bufferedAmountLowThreshold = BUFFER_LOW;
+    remoteChunkLimit = 16 << 10;
     $('#pair').hidden = true; $('#app').hidden = false; waiting(false);
     stage.classList.add('live', 'boom'); $('#peerNode').classList.remove('ghost');
     $('#pill').textContent = 'Connected'; $('#pill').className = 'pill on';
     $('#peerName').textContent = 'Device connected';
-    c.send(JSON.stringify({ t: 'hello', name: me.name, kind: me.kind }));
+    c.send(JSON.stringify({ t: 'hello', name: me.name, kind: me.kind, maxChunk: myChunkLimit }));
+    setTimeout(() => identifyRoute(c), 1800);
   });
   c.on('data', (d) => onMsg({ data: d }));
   c.on('close', () => {
@@ -219,7 +279,7 @@ function join() {
 }
 
 /* ---------- activity cards ---------- */
-const rate = (t0, b, total) => { const s = (performance.now() - t0) / 1000 || .001, r = b / s, eta = (total - b) / r; return `${size(b)} of ${size(total)} · ${size(r)}/s · ${eta < 1 ? 'almost done' : Math.ceil(eta) + 's left'}`; };
+const rate = (t0, b, total) => { const s = Math.max(.001, (performance.now() - t0) / 1000), r = b / s, eta = r > 0 ? (total - b) / r : Infinity; return `${size(b)} of ${size(total)} · ${size(r)}/s · ${!Number.isFinite(eta) ? 'calculating…' : eta < 1 ? 'almost done' : Math.ceil(eta) + 's left'}`; };
 function thumb(ico, url) { ico.style.backgroundImage = `url(${url})`; ico.textContent = ''; }
 function item(dir, name, sz, imgUrl) {
   const e = $('#log .empty'); if (e) e.remove();
@@ -257,7 +317,9 @@ function onMsg(ev) {
     cur.it.set(cur.got, rate(cur.t0, cur.got, cur.size)); return;
   }
   const m = JSON.parse(ev.data);
-  if (m.t === 'hello') { $('#peerName').textContent = m.name; $('#peerOrb').innerHTML = IC[m.kind] || IC.laptop; }
+  if (m.t === 'hello') { $('#peerName').textContent = m.name; $('#peerOrb').innerHTML = IC[m.kind] || IC.laptop;
+    if (Number.isSafeInteger(m.maxChunk) && m.maxChunk >= 1024) remoteChunkLimit = Math.min(m.maxChunk, MAX_CHUNK);
+  }
   else if (m.t === 'file-start') { flow('in', 1); cur = { ...m, chunks: [], got: 0, t0: performance.now(), it: item('in', m.name, m.size) }; }
   else if (m.t === 'file-end' && cur) {
     const blob = new Blob(cur.chunks, { type: cur.type || 'application/octet-stream' });
@@ -265,34 +327,67 @@ function onMsg(ev) {
   } else if (m.t === 'text') textItem('in', m.text);
 }
 
-/* ---------- sending ---------- */
+/* ---------- optimized sending ---------- */
+// Serializing outgoing file batches also prevents overlapping file-start/file-end messages.
+let outgoingQueue = Promise.resolve();
+function queueFiles(files) {
+  if (!files.length) return;
+  outgoingQueue = outgoingQueue.then(() => sendFiles(files))
+    .catch(e => fail('Transfer error: ' + (e?.message || e)));
+}
 async function sendFiles(files) {
   for (const f of files) {
-    const it = item('out', f.name, f.size, f.type.startsWith('image/') ? URL.createObjectURL(f) : null), t0 = performance.now();
+    const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
+    const it = item('out', f.name, f.size, preview), t0 = performance.now();
+    let queued = 0, ticker;
     flow('out', 1);
     try {
+      if (dc?.readyState !== 'open') throw new Error('Connect to a device before sending');
       dc.send(JSON.stringify({ t: 'file-start', name: f.name, size: f.size, type: f.type }));
-      for (let o = 0; o < f.size; o += BLOCK) {
-        const block = await f.slice(o, o + BLOCK).arrayBuffer();   // one disk read per 1 MB
-        for (let p = 0; p < block.byteLength; p += CHUNK) {
-          if (dc.bufferedAmount > HIGH) await new Promise((res) => dc.addEventListener('bufferedamountlow', res, { once: true }));
-          dc.send(new Uint8Array(block, p, Math.min(CHUNK, block.byteLength - p)));   // view, no copy
+      // Show estimated bytes already moved out of the browser queue (not merely queued).
+      const update = () => {
+        if (dc?.readyState !== 'open') return;
+        const moved = Math.max(0, Math.min(f.size, queued - dc.bufferedAmount));
+        it.set(moved, rate(t0, moved, f.size));
+      };
+      ticker = setInterval(update, 125);
+      for (let o = 0; o < f.size; o += READ_BATCH) {
+        // One read per 2 MiB rather than one read for every 16 KiB packet.
+        const slab = new Uint8Array(await f.slice(o, Math.min(f.size, o + READ_BATCH)).arrayBuffer());
+        for (let i = 0; i < slab.byteLength;) {
+          if (dc.readyState !== 'open') throw new Error('Device disconnected during transfer');
+          if (dc.bufferedAmount >= BUFFER_HIGH) await waitForBuffer();
+          let n = Math.min(chunkSize(), slab.byteLength - i);
+          try {
+            dc.send(slab.subarray(i, i + n));
+          } catch (e) {
+            // Retry a packet with the universally conservative size if a browser rejects it.
+            if (n <= 16 << 10 || dc.readyState !== 'open') throw e;
+            remoteChunkLimit = Math.min(remoteChunkLimit, 16 << 10);
+            n = Math.min(16 << 10, slab.byteLength - i);
+            dc.send(slab.subarray(i, i + n));
+          }
+          i += n;
+          queued += n;
         }
-        const b = Math.min(o + BLOCK, f.size); it.set(b, rate(t0, b, f.size));
       }
       dc.send(JSON.stringify({ t: 'file-end' }));
-      while (dc.bufferedAmount > 0) await new Promise((res) => setTimeout(res, 50));
-      it.done('Sent · ' + size(f.size));
-    } catch (e) { it.bad('Failed: ' + e.message); }
-    flow('out', -1);
+      await waitForDrain();
+      it.done('Sent · ' + size(f.size) + ' · ' + size(f.size / Math.max(.001, (performance.now() - t0) / 1000)) + '/s');
+    } catch (e) {
+      it.bad('Failed: ' + (e?.message || e));
+    } finally {
+      clearInterval(ticker);
+      flow('out', -1);
+    }
   }
 }
 $('#drop').onclick = () => $('#picker').click();
 $('#drop').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#picker').click(); } };
-$('#picker').onchange = (e) => { sendFiles([...e.target.files]); e.target.value = ''; };
+$('#picker').onchange = (e) => { queueFiles([...e.target.files]); e.target.value = ''; };
 addEventListener('dragover', (e) => { e.preventDefault(); if (!$('#app').hidden) document.body.classList.add('dragging'); });
 addEventListener('dragleave', (e) => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
-addEventListener('drop', (e) => { e.preventDefault(); document.body.classList.remove('dragging'); if (!$('#app').hidden && e.dataTransfer.files.length) sendFiles([...e.dataTransfer.files]); });
+addEventListener('drop', (e) => { e.preventDefault(); document.body.classList.remove('dragging'); if (!$('#app').hidden && e.dataTransfer.files.length) queueFiles([...e.dataTransfer.files]); });
 const sendText = () => { const v = $('#text').value.trim(); if (!v) return; dc.send(JSON.stringify({ t: 'text', text: v })); textItem('out', v); $('#text').value = ''; };
 $('#bText').onclick = sendText; $('#text').onkeydown = (e) => { if (e.key === 'Enter') sendText(); };
 </script>

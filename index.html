@@ -1,395 +1,204 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DropShare</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080f21">
+<title>DropShare — Fast, effortless file sharing</title>
 <style>
-:root{color-scheme:light;--bg:#F2F7FB;--card:#fff;--ink:#0E2339;--soft:#5E7389;--line:#DAE4EE;--a:#2F6BFF;--b:#12B8A6;--ok:#16A34A;--bad:#E5484D;--tint:#E8F1FF;--tint-line:#CFE0F8;
-  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-*{box-sizing:border-box}[hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:520px;margin:0 auto;padding:18px 16px 48px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.brand{display:flex;align-items:center;gap:10px;font-size:1.25rem;font-weight:700;letter-spacing:-.02em}
-.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-top:14px}
-h2{font-size:1rem;margin:0}p{margin:0;color:var(--soft)}
-.pill{display:inline-flex;gap:7px;align-items:center;padding:5px 12px;border-radius:999px;border:1px solid var(--line);font-size:.8rem;font-weight:600;color:var(--soft);background:var(--card)}
-.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--line)}
-.pill.on{color:var(--ok)}.pill.on::before{background:var(--ok);animation:beat 1.6s infinite}
-@keyframes beat{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
-
-/* The link stage: two devices, one beam. Packets travel the beam while files move. */
-.stage{background:var(--tint);border-color:var(--tint-line);display:grid;grid-template-columns:76px 1fr 76px;align-items:start;padding:24px 16px 16px;border-radius:28px;margin-top:0}
-.node{text-align:center}.node small{display:block;margin-top:8px;font-weight:600;font-size:.8rem;overflow-wrap:anywhere}
-.orb{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--a);position:relative}
-.peer .orb{background:var(--b)}
-.peer.ghost .orb{background:#fff;border:2px dashed #A9C3E8;color:#7C93AE}
-.peer.ghost.wait .orb::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--b);animation:ping 1.6s ease-out infinite}
-.beam{position:relative;height:3px;margin:37px 8px 0;border-radius:2px;background:repeating-linear-gradient(90deg,#A9C3E8 0 6px,transparent 6px 12px);animation:march 1s linear infinite}
-.live .beam{background:linear-gradient(90deg,var(--a),var(--b));animation:none}
-.live .orb{animation:pop .6s cubic-bezier(.3,1.6,.5,1)}
-.beam::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border-radius:50%;border:2px solid var(--a);opacity:0}
-.boom .beam::after{animation:ping 1s ease-out}
-.pk{position:absolute;top:50%;width:9px;height:9px;margin-top:-4px;border-radius:50%;opacity:0}
-.pk.o{background:var(--a)}.pk.i{background:var(--b)}
-.f-out .pk.o{animation:fo 1.1s linear infinite;animation-delay:calc(var(--n)*.27s)}
-.f-in .pk.i{animation:fi 1.1s linear infinite;animation-delay:calc(var(--n)*.27s)}
-@keyframes fo{0%{left:0;opacity:0}15%,85%{opacity:1}100%{left:100%;opacity:0}}
-@keyframes fi{0%{left:100%;opacity:0}15%,85%{opacity:1}100%{left:0;opacity:0}}
-@keyframes march{to{background-position:12px 0}}
-@keyframes ping{from{transform:scale(.4);opacity:.9}to{transform:scale(9);opacity:0}}
-.peer.ghost.wait .orb::after{animation-name:ring}
-@keyframes ring{from{transform:scale(1);opacity:.9}to{transform:scale(1.6);opacity:0}}
-@keyframes pop{0%{transform:scale(.8)}100%{transform:scale(1)}}
-
-/* Pairing */
-.seg{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:999px;padding:4px}
-.seg button{position:relative;z-index:1;background:none;border:0;color:var(--soft);font-family:inherit;font-weight:600;font-size:.9rem;padding:9px;cursor:pointer;border-radius:999px;transition:color .2s}
-.seg button.on{color:var(--ink)}
-.seg i{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);background:var(--card);border-radius:999px;transition:transform .35s cubic-bezier(.3,1.3,.5,1);box-shadow:0 1px 3px rgba(0,0,0,.15)}
-.seg[data-t=join] i{transform:translateX(100%)}
-.pane{text-align:center;padding-top:16px}
-.digits{display:flex;gap:8px;justify-content:center;margin:16px 0}
-.digits span,.digits input{width:44px;height:58px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);display:grid;place-items:center;font:700 1.7rem ui-rounded,system-ui,sans-serif;text-align:center;color:var(--ink);overflow:hidden;padding:0;font-variant-numeric:tabular-nums}
-.digits span b{display:block;animation:roll .65s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(var(--i)*70ms)}
-@keyframes roll{from{transform:translateY(-130%);filter:blur(4px);opacity:0}}
-.digits input:focus{border-color:var(--a);outline:3px solid color-mix(in srgb,var(--a) 28%,transparent)}
-.shake{animation:shake .4s}@keyframes shake{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
-.btn{display:inline-block;font-family:inherit;font-weight:600;font-size:.95rem;padding:11px 22px;border-radius:999px;border:0;background:var(--a);color:#fff;cursor:pointer;text-decoration:none;transition:transform .15s}
-.btn:hover{transform:translateY(-1px)}.btn:active{transform:scale(.96)}
-.btn.sm{padding:6px 14px;font-size:.82rem}.btn.alt{background:var(--bg);color:var(--ink)}
-button:focus-visible,.btn:focus-visible,.drop:focus-visible,.tbox input:focus-visible{outline:3px solid var(--b);outline-offset:2px}
-#err{color:var(--bad);font-size:.9rem;min-height:1.3em;margin-top:10px;text-align:center}
-.dots span{display:inline-block;animation:dot 1.2s infinite}.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
-@keyframes dot{50%{transform:translateY(-4px);opacity:.4}}
-.note{font-size:.78rem;text-align:center;margin-top:12px}
-
-/* Send + activity */
-.drop{display:grid;justify-items:center;gap:2px;padding:28px 16px;border-radius:24px;border:2px dashed var(--line);background:var(--card);cursor:pointer;text-align:center;margin-top:14px;transition:transform .2s,border-color .2s,background .2s}
-.drop svg{color:var(--a);animation:bob 2.4s ease-in-out infinite}.drop b{margin-top:6px}
-@keyframes bob{50%{transform:translateY(-6px)}}
-.drop.over,.dragging .drop{border-color:var(--a);background:var(--tint);transform:scale(1.02)}
-.tbox{display:flex;gap:8px}.tbox input{flex:1;min-width:0;font:inherit;padding:11px 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
-.empty{color:var(--soft);font-size:.9rem;padding-top:8px}
-.item{display:grid;grid-template-columns:46px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:16px;margin-top:10px;animation:in .45s cubic-bezier(.2,.9,.3,1.1)}
-@keyframes in{from{opacity:0;transform:translateY(-12px) scale(.96)}}
-.ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-weight:700;font-size:.68rem;color:#fff;background:hsl(var(--h,220) 68% 50%) center/cover;position:relative}
-.ico::after{position:absolute;right:-5px;bottom:-5px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;border:2px solid var(--card);color:#fff}
-.out .ico::after{content:"↑";background:var(--a)}.in .ico::after{content:"↓";background:var(--b)}
-.meta{min-width:0}.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sub{color:var(--soft);font-size:.78rem;font-variant-numeric:tabular-nums}
-.txt{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}.txt a{color:var(--a)}
-.bar{height:5px;border-radius:3px;background:var(--bg);margin-top:7px;overflow:hidden;transition:height .3s,margin .3s,opacity .3s}
-.bar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--a),var(--b),var(--a));background-size:200% 100%;animation:shine 1.2s linear infinite;transition:width .12s}
-@keyframes shine{to{background-position:-200% 0}}
-.done .bar{height:0;margin-top:0;opacity:0}.fail .sub{color:var(--bad)}
-.act{display:flex;align-items:center;gap:8px}
-.chk{width:30px;height:30px;color:var(--ok)}.chk path{stroke-dasharray:24;stroke-dashoffset:24;animation:draw .5s .1s forwards}
-@keyframes draw{to{stroke-dashoffset:0}}
-@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+:root{color-scheme:dark;--bg:#080f21;--surface:#111c35;--surface2:#162541;--panel:rgba(20,33,57,.82);--panel-solid:#12203a;--stroke:rgba(151,177,225,.14);--stroke2:rgba(151,177,225,.25);--ink:#eff5ff;--muted:#91a3c3;--subtle:#64799d;--blue:#548dff;--bright:#76a6ff;--mint:#3cdbc6;--danger:#ff737c;--success:#54d8a0;--glow:rgba(69,125,255,.24);--softblue:rgba(84,141,255,.11);--shadow:0 30px 90px rgba(0,0,0,.2)}
+html[data-theme="light"]{color-scheme:light;--bg:#f4f7fe;--surface:#fff;--surface2:#edf3fd;--panel:rgba(255,255,255,.88);--panel-solid:#fff;--stroke:rgba(51,78,129,.12);--stroke2:rgba(51,78,129,.22);--ink:#172a47;--muted:#647795;--subtle:#8798b0;--blue:#356fe8;--bright:#3575f3;--mint:#0bb9a3;--danger:#dc5364;--success:#13a878;--glow:rgba(55,115,234,.14);--softblue:rgba(61,121,235,.08);--shadow:0 28px 72px rgba(42,71,123,.09)}
+*{box-sizing:border-box}html{min-height:100%;scroll-behavior:smooth}[hidden]{display:none!important}body{margin:0;min-height:100vh;color:var(--ink);background:var(--bg);font:14px/1.55 'DM Sans',system-ui,-apple-system,sans-serif;transition:background .3s,color .3s;overflow-x:hidden}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible,.dropzone:focus-visible,a:focus-visible{outline:3px solid var(--mint);outline-offset:3px}a{color:inherit}p{margin:0}h1,h2,h3{font-family:'Plus Jakarta Sans','DM Sans',sans-serif;letter-spacing:-.035em;margin:0}h1{font-size:clamp(35px,4.6vw,58px);line-height:1.12;font-weight:800}h2{font-size:19px;font-weight:800}h3{font-size:14px;font-weight:800}svg{display:block;flex:none}button svg{pointer-events:none}.svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ambient{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:-1}.ambient:before{content:'';position:absolute;width:800px;height:800px;top:-480px;left:23%;border-radius:100%;background:radial-gradient(circle,rgba(54,92,200,.20),transparent 66%);animation:drift 14s ease-in-out infinite alternate}.ambient:after{content:'';position:absolute;width:650px;height:650px;right:-300px;top:220px;border-radius:100%;background:radial-gradient(circle,rgba(13,174,168,.10),transparent 65%);animation:drift 17s ease-in-out infinite alternate-reverse}.wrap{max-width:1200px;margin:auto;padding:0 28px 48px}.topbar{min-height:95px;display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--stroke)}.logo{display:flex;align-items:center;gap:13px;text-decoration:none}.logo-mark{display:grid;place-items:center;width:43px;height:43px;border-radius:14px;background:linear-gradient(135deg,#5e9eff,#4d6af2 55%,#37d3c2);box-shadow:0 10px 28px rgba(73,121,245,.28);color:#fff}.logo-mark .svg{width:25px;height:25px;stroke-width:2.2}.logo b{display:block;font-family:'Plus Jakarta Sans';font-weight:800;font-size:21px;letter-spacing:-.055em;line-height:1.2}.logo small{display:block;color:var(--muted);letter-spacing:.02em;font-size:11px}.rightbar{display:flex;align-items:center;gap:10px}.icon-btn{width:39px;height:39px;display:grid;place-items:center;border:1px solid var(--stroke);border-radius:12px;background:var(--panel);color:var(--muted);transition:background .2s,color .2s,transform .2s}.icon-btn:hover{color:var(--ink);background:var(--surface2);transform:translateY(-1px)}.status{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--stroke);border-radius:999px;background:var(--panel);padding:9px 13px;font-size:12px;font-weight:700;white-space:nowrap;color:var(--muted)}.status-dot{width:8px;height:8px;border-radius:50%;background:#7786a1}.status.connected{color:var(--success)}.status.connected .status-dot{background:var(--success);box-shadow:0 0 0 4px rgba(84,216,160,.11);animation:breathe 2s infinite}.status.working{color:var(--blue)}.status.working .status-dot{background:var(--blue);animation:breathe 1.5s infinite}
+.hero{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:48px;padding:52px 0 24px}.eyebrow{display:inline-flex;align-items:center;gap:8px;letter-spacing:.12em;text-transform:uppercase;font-size:10px;font-weight:800;color:var(--mint);margin-bottom:17px}.eyebrow span{height:6px;width:6px;background:currentColor;border-radius:50%;box-shadow:0 0 15px currentColor}.hero h1 span{display:block;background:linear-gradient(100deg,var(--bright),var(--mint));background-clip:text;color:transparent}.hero p{margin:19px 0 0;max-width:430px;font-size:15px;color:var(--muted);line-height:1.8}.mini-features{display:flex;align-items:center;gap:21px;flex-wrap:wrap;margin-top:26px}.mini-features span{display:inline-flex;gap:7px;align-items:center;font-weight:700;font-size:11px;color:var(--muted)}.mini-features .svg{width:16px;height:16px;color:var(--mint)}
+.network{position:relative;height:250px;display:flex;align-items:center;justify-content:space-around;border-radius:26px;border:1px solid var(--stroke);background:radial-gradient(ellipse at 50% 55%,rgba(66,113,237,.14),transparent 65%),var(--panel);overflow:hidden;isolation:isolate;box-shadow:var(--shadow)}.network:before{content:'';position:absolute;inset:0;background-image:radial-gradient(var(--stroke2) .85px,transparent .85px);background-size:22px 22px;opacity:.5;mask-image:linear-gradient(90deg,transparent 0%,black 15%,black 85%,transparent 100%)}.network .halo{position:absolute;width:240px;height:240px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid rgba(103,146,244,.09);border-radius:50%;box-shadow:0 0 0 48px rgba(103,146,244,.025),0 0 0 96px rgba(103,146,244,.016);pointer-events:none}.device{z-index:2;position:relative;width:112px;text-align:center}.device-card{height:88px;width:88px;display:grid;place-items:center;border-radius:25px;margin:0 auto 13px;background:linear-gradient(155deg,#203969,#122244);border:1px solid rgba(151,183,248,.26);box-shadow:0 18px 38px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.08);color:#9abaff;transition:transform .5s}.device.local .device-card{background:linear-gradient(145deg,#366dd9,#1d397e);color:white}.device.remote .device-card{background:linear-gradient(145deg,#164d52,#102b46);color:#3cdbc6}.device.remote.waiting .device-card{animation:device-pulse 2.2s infinite}.device .svg{height:38px;width:38px;stroke-width:1.35}.device strong{display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}.device small{display:block;color:var(--subtle);font-size:10px;margin-top:3px}.network .connection-line{position:absolute;left:27%;right:27%;height:2px;top:42%;background:repeating-linear-gradient(90deg,rgba(126,155,225,.5) 0px,rgba(126,155,225,.5) 5px,transparent 5px,transparent 12px)}.network.connected .connection-line{height:2px;background:linear-gradient(90deg,var(--blue),var(--mint));box-shadow:0 0 22px rgba(83,134,255,.6)}.packet{position:absolute;top:calc(42% - 5px);height:10px;width:10px;border-radius:50%;left:27%;opacity:0;background:var(--bright);box-shadow:0 0 16px var(--bright)}.network.sending .packet.out{animation:packet-right 1.15s linear infinite}.network.receiving .packet.in{background:var(--mint);box-shadow:0 0 16px var(--mint);animation:packet-left 1.15s linear infinite}.packet.p2{animation-delay:-.43s!important}.packet.p3{animation-delay:-.8s!important}.net-center{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--stroke2);background:var(--panel-solid);border-radius:50%;color:var(--bright);z-index:1}.net-center .svg{height:18px;width:18px}.network.connected .net-center{color:var(--mint);box-shadow:0 0 20px rgba(55,213,190,.15)}
+.dashboard{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(340px,.88fr);gap:20px;align-items:start;margin-top:24px}.panel{background:var(--panel);border:1px solid var(--stroke);border-radius:24px;padding:25px;box-shadow:0 10px 48px rgba(0,0,0,.055);backdrop-filter:blur(18px)}.panel-head{display:flex;justify-content:space-between;align-items:start;gap:12px}.kicker{font-size:10px;letter-spacing:.14em;color:var(--subtle);font-weight:800;text-transform:uppercase;margin-bottom:6px}.hint{font-size:12px;color:var(--muted);margin-top:5px}.pair-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;background:var(--surface2);padding:5px;border-radius:13px;margin-top:22px}.pair-tabs button{border:0;border-radius:10px;padding:12px;background:transparent;color:var(--muted);font-weight:800;transition:color .2s,background .2s,box-shadow .2s}.pair-tabs button.active{background:var(--panel-solid);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.09)}.pair-content{text-align:center;min-height:219px;padding-top:18px}.pair-content p{font-size:12px;color:var(--muted);max-width:360px;margin:auto}.code-digits{display:flex;justify-content:center;gap:8px;margin:22px 0}.code-digits span,.code-digits input{height:62px;width:48px;min-width:0;display:grid;place-items:center;text-align:center;border-radius:12px;background:var(--surface2);border:1px solid var(--stroke2);color:var(--ink);font:800 25px 'Plus Jakarta Sans',sans-serif;font-variant-numeric:tabular-nums;padding:0;outline:none;transition:border-color .2s,background .2s}.code-digits span{line-height:62px}.code-digits input:focus{border-color:var(--blue);background:var(--softblue)}.code-digits span.filled{border-color:rgba(84,141,255,.33);animation:digit-pop .3s both}.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:1px solid transparent;border-radius:12px;padding:12px 17px;background:linear-gradient(112deg,#558eff,#476ef0);color:#fff;font-size:12px;font-weight:800;line-height:1.4;box-shadow:0 8px 20px rgba(65,112,234,.20);transition:transform .2s,filter .2s,border-color .2s}.btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.07)}.btn .svg{width:17px;height:17px}.btn.secondary{color:var(--ink);background:var(--surface2);border-color:var(--stroke);box-shadow:none}.btn.ghost{color:var(--muted);background:transparent;border-color:var(--stroke2);box-shadow:none}.btn.small{padding:8px 11px;border-radius:9px;font-size:11px}.btn.danger{color:var(--danger);background:rgba(235,74,99,.09);border-color:rgba(235,74,99,.16);box-shadow:none}.pair-actions{display:flex;justify-content:center;gap:9px;flex-wrap:wrap}.pulse-inline{display:inline-flex;align-items:center;gap:9px;margin-top:14px;font-size:12px;font-weight:600;color:var(--mint)}.pulse-inline i{display:block;height:8px;width:8px;border-radius:50%;background:currentColor;animation:breathe 1.3s infinite}.notice{padding:12px 14px;border-radius:11px;background:var(--softblue);font-size:11px;color:var(--muted);display:flex;align-items:start;gap:9px;margin-top:16px}.notice .svg{width:16px;height:16px;flex:none;color:var(--bright)}.error-text{font-size:12px;color:var(--danger);margin-top:12px;text-align:center;min-height:0}.connected-strip{display:flex;align-items:center;gap:13px;padding:16px;margin-top:20px;background:rgba(44,212,162,.08);border:1px solid rgba(56,216,164,.21);border-radius:15px}.connected-strip .svg{color:var(--success);width:24px;height:24px}.connected-strip strong{font-size:13px;display:block}.connected-strip small{color:var(--muted);font-size:11px}.connected-strip .btn{margin-left:auto}
+.zone{position:relative;display:grid;justify-items:center;text-align:center;padding:26px 18px;margin-top:22px;min-height:188px;border:1.5px dashed rgba(91,144,246,.45);background:radial-gradient(ellipse at 50% -15%,rgba(81,126,239,.16),transparent 70%),var(--softblue);border-radius:19px;cursor:pointer;transition:transform .2s,border-color .2s,background .2s;outline:none}.zone:hover,.dragging .zone,.zone.dragover{transform:translateY(-2px);border-color:var(--mint);background:rgba(64,172,182,.1)}.zone.disabled{opacity:.55;cursor:not-allowed}.zone .zone-icon{position:relative;display:grid;place-items:center;width:53px;height:53px;border-radius:16px;background:var(--panel-solid);border:1px solid var(--stroke2);box-shadow:0 9px 22px rgba(0,0,0,.08);color:var(--bright);margin-bottom:12px}.zone .zone-icon .svg{height:24px;width:24px}.zone .zone-icon:before{content:'';position:absolute;inset:-7px;border:1px dashed rgba(91,144,246,.2);border-radius:22px;animation:spin 22s linear infinite}.zone strong{font-family:'Plus Jakarta Sans';font-size:14px}.zone small{color:var(--muted);font-size:11px;display:block;margin-top:5px}.panel-foot{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;margin-top:16px}.text-send{display:flex;gap:9px;margin-top:14px}.text-send input{width:100%;min-width:0;background:var(--surface2);border:1px solid var(--stroke);border-radius:12px;padding:12px 14px;color:var(--ink);outline:none;font-size:12px}.text-send input::placeholder{color:var(--subtle)}.text-send input:focus{border-color:var(--blue)}.text-send .btn{flex:none}.metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:18px}.metric{min-width:0;background:var(--surface2);border:1px solid var(--stroke);border-radius:15px;padding:13px 12px}.metric .label{font-size:10px;color:var(--muted);display:flex;gap:6px;align-items:center;white-space:nowrap}.metric .label .svg{width:13px;height:13px;color:var(--bright)}.metric b{display:block;margin-top:6px;font:800 18px 'Plus Jakarta Sans';letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric small{color:var(--subtle);font-size:10px}
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.list-filters{display:flex;gap:4px;margin-top:17px;padding:4px;border-radius:11px;background:var(--surface2)}.list-filters button{flex:1;border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:800;padding:8px;border-radius:8px}.list-filters button.active{color:var(--ink);background:var(--panel-solid);box-shadow:0 2px 8px rgba(0,0,0,.09)}.transfer-list{max-height:510px;min-height:258px;overflow-y:auto;overscroll-behavior:contain;padding-right:3px}.transfer-list::-webkit-scrollbar{width:5px}.transfer-list::-webkit-scrollbar-thumb{border-radius:5px;background:var(--stroke2)}.empty{display:grid;align-content:center;justify-items:center;text-align:center;min-height:255px;gap:7px;color:var(--muted)}.empty-graphic{display:grid;place-items:center;width:72px;height:72px;border:1px solid var(--stroke);background:var(--surface2);border-radius:22px;margin-bottom:8px}.empty-graphic .svg{width:33px;height:33px;color:var(--subtle)}.empty strong{color:var(--ink);font-size:13px}.empty p{font-size:11px;max-width:230px}.transfer{display:grid;grid-template-columns:42px minmax(0,1fr);gap:11px;padding:16px 0;border-bottom:1px solid var(--stroke);animation:slide-in .35s cubic-bezier(.2,.7,.15,1)}.transfer:last-child{border-bottom:0}.file-ico{display:grid;place-items:center;width:42px;height:45px;border-radius:12px;background:var(--softblue);color:var(--bright);overflow:hidden;background-position:center;background-size:cover}.file-ico .svg{width:21px;height:21px}.file-ico.image{background-color:rgba(61,217,197,.09);color:var(--mint)}.file-ico.message{color:var(--mint);background:rgba(61,217,197,.09)}.transfer-main{min-width:0}.filetop{display:flex;align-items:start;justify-content:space-between;gap:10px}.filename{font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.filedetails{font-size:10px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.filetag{font-size:9px;white-space:nowrap;border-radius:6px;padding:3px 6px;background:var(--surface2);color:var(--muted);font-weight:800}.filetag.success{color:var(--success);background:rgba(40,200,137,.09)}.filetag.failed{color:var(--danger);background:rgba(246,83,106,.08)}.filetag.running{color:var(--bright);background:var(--softblue)}.fileprogress{height:6px;border-radius:20px;overflow:hidden;background:var(--surface2);margin-top:12px}.fileprogress>i{display:block;width:0%;height:100%;border-radius:20px;background:linear-gradient(90deg,#5b91fb,#37d7c1);transition:width .14s linear;position:relative}.transfer.paused .fileprogress>i:after{animation:none!important}.transfer.running .fileprogress>i:after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);background-size:60% 100%;animation:shimmer 1.2s infinite}.filebottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px}.percent{font-weight:800;font-size:10px;color:var(--ink)}.fileactions{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:end}.action{display:inline-flex;align-items:center;gap:4px;color:var(--muted);background:var(--surface2);border:1px solid var(--stroke);padding:5px 8px;border-radius:8px;font-size:10px;font-weight:800;text-decoration:none}.action:hover{color:var(--bright);border-color:var(--stroke2)}.action .svg{width:12px;height:12px}.action.red{color:var(--danger)}.msg-body{color:var(--muted);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:7px}.msg-body a{color:var(--bright);text-decoration:underline}.footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:23px;color:var(--subtle);font-size:11px}.footer .svg{display:inline;vertical-align:-3px;color:var(--mint);width:14px;height:14px}.footer-links{display:flex;align-items:center;gap:15px}.footer button{border:0;background:none;color:var(--muted);padding:0;font-size:11px}.switch{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;user-select:none}.switch input{position:absolute;opacity:0;width:1px;height:1px}.switch .track{width:32px;height:19px;border-radius:99px;background:var(--stroke2);position:relative;transition:background .2s}.switch .track:before{content:'';width:13px;height:13px;position:absolute;top:3px;left:3px;background:white;border-radius:100%;transition:transform .2s}.switch input:checked+.track{background:var(--blue)}.switch input:checked+.track:before{transform:translateX(13px)}.switch input:focus-visible+.track{outline:2px solid var(--mint);outline-offset:2px}.toast-stack{position:fixed;z-index:100;right:20px;bottom:20px;display:grid;gap:10px;max-width:min(380px,calc(100vw - 40px))}.toast{background:var(--panel-solid);border:1px solid var(--stroke2);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow);color:var(--ink);display:flex;align-items:center;gap:9px;font-size:12px;animation:slide-in .26s ease}.toast .svg{color:var(--mint);width:17px;height:17px}.toast.err .svg{color:var(--danger)}.screen-label{display:none}.app-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(340px,.88fr);gap:20px;margin-top:18px;align-items:start}.side-column{display:grid;gap:18px}.placeholder{font-size:12px;color:var(--muted)}
+@keyframes breathe{50%{opacity:.45;box-shadow:0 0 0 7px rgba(84,216,160,.05)}}@keyframes drift{to{transform:translate(80px,80px)}}@keyframes packet-right{0%{left:27%;opacity:0}18%,80%{opacity:1}100%{left:73%;opacity:0}}@keyframes packet-left{0%{left:73%;opacity:0}18%,80%{opacity:1}100%{left:27%;opacity:0}}@keyframes device-pulse{50%{box-shadow:0 0 0 11px rgba(44,210,186,.07),0 18px 38px rgba(0,0,0,.16)}}@keyframes digit-pop{from{transform:translateY(6px) scale(.95);opacity:.2}to{transform:translateY(0) scale(1);opacity:1}}@keyframes shimmer{to{background-position:300px 0}}@keyframes slide-in{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:940px){.hero{gap:22px}.dashboard,.app-grid{grid-template-columns:1fr}.network{height:225px}.app-grid .side-column{grid-row:auto}.wrap{max-width:720px}.panel{padding:22px}}@media(max-width:600px){.wrap{padding:0 15px 36px}.topbar{min-height:76px}.logo b{font-size:18px}.logo-mark{width:39px;height:39px}.logo small{font-size:9px}.status{padding:9px 10px;font-size:10px}.hero{display:flex;flex-direction:column;align-items:stretch;padding:36px 0 12px;gap:27px}.hero h1{font-size:40px}.hero p{font-size:13px;margin-top:14px}.mini-features{gap:12px;margin-top:18px}.mini-features span{font-size:10px}.network{height:197px}.device-card{width:70px;height:70px;border-radius:20px;margin-bottom:11px}.device-card .svg{width:30px;height:30px}.device{width:93px}.network .connection-line{top:40%;left:26%;right:26%}.packet{top:calc(40% - 5px)}.net-center{top:40%;width:35px;height:35px}.dashboard{margin-top:18px;gap:15px}.panel{padding:19px;border-radius:19px}.code-digits{gap:5px}.code-digits span,.code-digits input{width:min(13vw,47px);height:56px;font-size:24px}.code-digits span{line-height:56px}.metric-row{gap:7px}.metric{padding:11px 9px}.metric b{font-size:16px}.footer{font-size:10px}.btn.small{font-size:10px;padding:8px 9px}.transfer-list{max-height:520px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <div class="brand"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><circle cx="11" cy="15" r="8" fill="#2F6BFF"/><circle cx="19" cy="15" r="8" fill="#12B8A6" style="mix-blend-mode:multiply"/></svg>DropShare</div>
-    <span id="pill" class="pill" role="status">Not connected</span>
-  </header>
-
-  <section class="card stage" id="stage" aria-label="Connection">
-    <div class="node"><div class="orb" id="meOrb"></div><small id="meName"></small></div>
-    <div class="beam" id="beam"></div>
-    <div class="node peer ghost" id="peerNode"><div class="orb" id="peerOrb"></div><small id="peerName">No device yet</small></div>
-  </section>
-
-  <section id="pair" class="card">
-    <div class="seg" id="seg" data-t="host"><i></i><button class="on" data-t="host">Show my code</button><button data-t="join">Enter a code</button></div>
-    <div id="pHost" class="pane">
-      <p>Open DropShare on the other device, choose <b>Enter a code</b>, and type this.</p>
-      <div class="digits" id="digits" aria-live="polite"></div>
-      <button class="btn" id="bHost">Generate code</button>
-      <p id="waiting" hidden>Waiting for the other device<span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden"><defs>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-7.7 18-3.4-7.9L2 9.7 21 3ZM21 3 9.9 13.1"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m0 0L7 8m5-5 5 5M5 16.5v2A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-2"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13m0 0 5-5m-5 5-5-5M5 18v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 17 5-5 4 4 3-3 6 6"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="15" rx="2"/><path d="M8 22h8M12 18v4"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.6.6l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.6-.6l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.7 14.2A9 9 0 0 1 9.8 3.3a9 9 0 1 0 10.9 10.9Z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 10-12h-7V2Z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5H6v14h3V5Zm9 0h-3v14h3V5Z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m7 4 14 8-14 8V4Z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A9 9 0 0 1 4 11.5a8.5 8.5 0 0 1 17 0Z"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5 9a8 8 0 0 1 14-2l1 5M4 12l1 5a8 8 0 0 0 14-2"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 15H6L5 6m5 4v7m4-7v7"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16m0 0-6-6m6 6-6 6"/></symbol>
+</defs></svg>
+<div class="ambient"></div>
+<div class="wrap">
+<header class="topbar">
+  <a class="logo" href="#" aria-label="DropShare home"><span class="logo-mark"><svg class="svg"><use href="#i-send"/></svg></span><span><b>dropshare<span style="color:var(--mint)">.</span></b><small>SHARE WITHOUT LIMITS</small></span></a>
+  <div class="rightbar"><button id="themeBtn" class="icon-btn" title="Toggle light / dark theme" aria-label="Toggle theme"><svg class="svg"><use href="#i-sun"/></svg></button><div class="status" id="connectionStatus"><span class="status-dot"></span><span id="statusText">Not connected</span></div></div>
+</header>
+<section class="hero" aria-label="Introduction and device connection">
+  <div><div class="eyebrow"><span></span> FAST • SIMPLE • SECURE CONNECTION</div><h1>Sharing files,<span>beautifully simple.</span></h1><p>Send photos, videos, documents and messages from one device to another. No accounts. No cloud uploads required for file transfer.</p><div class="mini-features"><span><svg class="svg"><use href="#i-zap"/></svg> Fast file transfers</span><span><svg class="svg"><use href="#i-shield"/></svg> Encrypted in transit</span><span><svg class="svg"><use href="#i-globe"/></svg> Works across devices</span></div></div>
+  <div class="network" id="network"><div class="halo"></div><div class="connection-line"></div><span class="packet out"></span><span class="packet out p2"></span><span class="packet out p3"></span><span class="packet in"></span><span class="packet in p2"></span><span class="packet in p3"></span>
+    <div class="device local"><div class="device-card" id="localIcon"><svg class="svg"><use href="#i-monitor"/></svg></div><strong id="myName">My device</strong><small>This device</small></div>
+    <div class="net-center"><svg class="svg" id="networkIcon"><use href="#i-link"/></svg></div>
+    <div class="device remote" id="remoteDevice"><div class="device-card" id="remoteIcon"><svg class="svg"><use href="#i-monitor"/></svg></div><strong id="remoteName">Waiting for peer</strong><small id="remoteHint">No device linked</small></div>
+  </div>
+</section>
+<section class="dashboard" aria-label="Connection tools">
+  <div class="panel" id="pairPanel"><div class="panel-head"><div><div class="kicker">STEP 01 — CONNECT</div><h2>Connect your devices</h2><p class="hint">Pair two devices using a temporary 6-digit session code.</p></div><svg class="svg" style="color:var(--muted);width:22px;height:22px"><use href="#i-link"/></svg></div>
+    <div id="pairingControls"><div class="pair-tabs" id="pairTabs"><button type="button" data-tab="host" class="active">Create a code</button><button type="button" data-tab="join">Enter a code</button></div>
+      <div id="hostPane" class="pair-content"><p>Open DropShare on your other device, then enter this code to connect.</p><div class="code-digits" id="hostCode" aria-live="polite"><span>–</span><span>–</span><span>–</span><span>–</span><span>–</span><span>–</span></div><div class="pair-actions"><button class="btn" id="createBtn"><svg class="svg"><use href="#i-zap"/></svg> Generate code</button><button class="btn secondary" id="copyCodeBtn" hidden><svg class="svg"><use href="#i-copy"/></svg> Copy code</button><button class="btn secondary" id="copyLinkBtn" hidden><svg class="svg"><use href="#i-link"/></svg> Invite link</button></div><div id="waitLabel" class="pulse-inline" hidden><i></i> Waiting for the other device…</div></div>
+      <div id="joinPane" class="pair-content" hidden><p>Type the code displayed on the sending or receiving device.</p><div class="code-digits" id="joinCode"></div><div class="pair-actions"><button class="btn" id="joinBtn"><svg class="svg"><use href="#i-arrow-right"/></svg> Connect devices</button></div><div id="joinLabel" class="pulse-inline" hidden><i></i> Establishing secure connection…</div></div>
+      <div class="error-text" id="errorMsg" role="alert"></div>
+      <div class="notice"><svg class="svg"><use href="#i-shield"/></svg><span>Both devices need internet to pair. WebRTC transfers file data directly when possible; restrictive networks may require a relay.</span></div>
     </div>
-    <div id="pJoin" class="pane" hidden>
-      <p>Type the 6-digit code shown on the other device.</p>
-      <div class="digits" id="joinDigits"></div>
-      <p id="joining" hidden>Connecting<span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
+    <div id="connectedControls" hidden><div class="connected-strip"><svg class="svg"><use href="#i-check"/></svg><div><strong>Devices connected</strong><small id="routeDetail">Ready to send and receive</small></div><button class="btn small secondary" id="disconnectBtn">Disconnect</button></div><div class="notice"><svg class="svg"><use href="#i-shield"/></svg><span>Your connection uses encrypted WebRTC data transport. Keep both tabs open until transfers finish.</span></div></div>
+  </div>
+  <div class="panel"><div class="panel-head"><div><div class="kicker">LIVE SESSION</div><h2>Transfer overview</h2><p class="hint" id="overviewHint">Your transfer stats appear here.</p></div><svg class="svg" style="color:var(--mint);width:22px;height:22px"><use href="#i-zap"/></svg></div><div class="metric-row"><div class="metric"><div class="label"><svg class="svg"><use href="#i-zap"/></svg> Live speed</div><b id="metricSpeed">—</b><small>Approx. data rate</small></div><div class="metric"><div class="label"><svg class="svg"><use href="#i-check"/></svg> Completed</div><b id="metricCount">0</b><small>Files in session</small></div><div class="metric"><div class="label"><svg class="svg"><use href="#i-upload"/></svg> Transferred</div><b id="metricBytes">0 B</b><small>Total file data</small></div></div><div class="notice"><svg class="svg"><use href="#i-zap"/></svg><span id="connectionRoute">Transfer route: waiting for connection</span></div></div>
+</section>
+<section class="app-grid" aria-label="File sharing and recent activity">
+  <div class="side-column">
+    <div class="panel"><div class="panel-head"><div><div class="kicker">STEP 02 — SHARE</div><h2>Send something awesome</h2><p class="hint">Choose one file or select many to send in order.</p></div><span class="filetag running" id="queueBadge">0 in queue</span></div>
+      <div class="zone disabled" id="dropzone" role="button" tabindex="0" aria-disabled="true" aria-label="Choose files to send"><span class="zone-icon"><svg class="svg"><use href="#i-upload"/></svg></span><strong>Drag & drop your files here</strong><small>or click to browse · Photos, videos, documents & more</small></div><input id="filePicker" type="file" multiple hidden>
+      <div class="panel-foot"><span class="placeholder" id="dropHint">Connect a device first to enable sharing.</span><button class="btn small secondary" id="browseBtn" disabled><svg class="svg"><use href="#i-file"/></svg> Browse files</button></div>
+      <div class="text-send"><input id="messageInput" type="text" maxlength="20000" placeholder="Send a note, URL or message…" aria-label="Message to send" disabled><button id="messageSend" class="btn" disabled><svg class="svg"><use href="#i-send"/></svg> Send</button></div>
     </div>
-    <div id="err" role="alert"></div>
-    <p class="note">Both devices need internet to connect. Files then go directly between them and are never uploaded.</p>
-  </section>
-
-  <section id="app" hidden>
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files to send">
-      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
-      <b>Drop files to send</b><span class="sub">or tap to choose</span>
-    </div>
-    <input type="file" id="picker" multiple hidden>
-    <div class="card tbox"><input id="text" placeholder="Send a message or link" aria-label="Message"><button class="btn" id="bText">Send</button></div>
-    <div class="card"><h2>Activity</h2><div id="log"><div class="empty">Files and messages will appear here.</div></div></div>
-  </section>
-</main>
-
+    <div class="panel"><div class="panel-head"><div><div class="kicker">PREFERENCES</div><h2>Make it yours</h2><p class="hint">Personalize the receiving experience.</p></div></div><div class="panel-foot" style="margin-top:19px"><label class="switch"><input type="checkbox" id="autoDownload"><span class="track"></span> Auto-save received files <span style="font-weight:400">(browser permitting)</span></label></div><div class="notice"><svg class="svg"><use href="#i-image"/></svg><span>Tip: Paste a copied screenshot (Ctrl/⌘ + V) while connected to send it instantly. Incoming files also have a manual Save button.</span></div></div>
+  </div>
+  <div class="panel"><div class="list-head"><div><div class="kicker">YOUR ACTIVITY</div><h2>Transfer activity</h2></div><button class="btn small ghost" id="clearBtn" title="Clear finished activity"><svg class="svg"><use href="#i-trash"/></svg> Clear done</button></div><div class="list-filters" id="filterTabs"><button class="active" data-filter="all">All</button><button data-filter="files">Files</button><button data-filter="messages">Messages</button></div><div class="transfer-list" id="transferList"><div class="empty"><div class="empty-graphic"><svg class="svg"><use href="#i-file"/></svg></div><strong>No transfers yet</strong><p>Connect your devices and your transfers will show up here.</p></div></div></div>
+</section>
+<footer class="footer"><span><svg class="svg"><use href="#i-shield"/></svg> End-to-end encrypted WebRTC file transport · No account needed</span><span class="footer-links"><span id="footerStatus">Ready when you are</span><button id="reloadBtn">Restart session</button></span></footer>
+</div>
+<div class="toast-stack" id="toasts" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 'use strict';
-const $ = (s) => document.querySelector(s);
-const mk = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
-const pick = (a) => a[Math.random() * a.length | 0];
-const me = { name: pick(['Blue','Swift','Calm','Brave','Lucky','Amber','Misty','Sunny']) + ' ' + pick(['Fox','Otter','Panda','Heron','Lynx','Koala','Falcon','Gecko']),
-  kind: /iPhone|Android|Mobile/i.test(navigator.userAgent) ? 'phone' : 'laptop' };
-const sv = (d) => `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-const IC = {
-  phone: sv('<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>'),
-  laptop: sv('<rect x="3.5" y="4.5" width="17" height="11" rx="2"/><path d="M2 19.5h20"/>'),
-  chk: '<svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>',
-};
-// Faster transfer engine: read disk in 2 MiB slabs, then send adaptive WebRTC packets.
-// Small packets remain available for browsers with conservative SCTP message limits.
-const READ_BATCH = 2 << 20, MAX_CHUNK = 64 << 10;
-const BUFFER_HIGH = 8 << 20, BUFFER_LOW = 2 << 20;
-const legacyWebKit = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-  (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Edg/.test(navigator.userAgent));
-const myChunkLimit = legacyWebKit ? 16 << 10 : MAX_CHUNK;
-let remoteChunkLimit = 16 << 10; // Conservative until the second device says what it supports.
-function chunkSize() {
-  const maxSctp = conn?.peerConnection?.sctp?.maxMessageSize;
-  return Math.min(myChunkLimit, remoteChunkLimit,
-    Number.isFinite(maxSctp) && maxSctp > 0 ? maxSctp : MAX_CHUNK);
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const ico = name => `<svg class="svg"><use href="#i-${name}"/></svg>`;
+const size = n => !Number.isFinite(n) ? '—' : n < 1024 ? `${Math.round(n)} B` : n < 1048576 ? `${(n/1024).toFixed(1)} KB` : n < 1073741824 ? `${(n/1048576).toFixed(1)} MB` : `${(n/1073741824).toFixed(2)} GB`;
+const id = () => (crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2)));
+const safeSave = (key,value) => { try { localStorage.setItem(key,value); } catch {} };
+const safeRead = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+const sleep = ms => new Promise(resolve => setTimeout(resolve,ms));
+const isPhone = /iPhone|Android|Mobile/i.test(navigator.userAgent);
+const names = ['Blue','Swift','Calm','Brave','Lucky','Amber','Misty','Sunny','Nova','Cosmic'];
+const animals = ['Fox','Otter','Panda','Heron','Lynx','Koala','Falcon','Gecko'];
+const random = a => a[Math.floor(Math.random()*a.length)];
+const me = {name: `${random(names)} ${random(animals)}`,kind: isPhone ? 'phone' : 'monitor'};
+$('#myName').textContent = me.name;
+$('#localIcon').innerHTML = ico(me.kind);
+let theme = safeRead('dropshare-theme') === 'light' ? 'light' : 'dark';
+function setTheme(t){ theme=t;document.documentElement.dataset.theme=t;$('#themeBtn').innerHTML=ico(t==='dark'?'sun':'moon');safeSave('dropshare-theme',t); }
+setTheme(theme);
+$('#themeBtn').onclick=()=>setTheme(theme==='dark'?'light':'dark');
+let autoload = safeRead('dropshare-autosave')==='true'; $('#autoDownload').checked=autoload;
+$('#autoDownload').onchange=e=>{autoload=e.target.checked;safeSave('dropshare-autosave',String(autoload));toast(autoload?'Auto-save enabled (subject to browser restrictions)':'Auto-save disabled');};
+function toast(s,bad=false){const e=document.createElement('div');e.className='toast'+(bad?' err':'');e.innerHTML=ico(bad?'x':'check');const sp=document.createElement('span');sp.textContent=s;e.append(sp);$('#toasts').append(e);setTimeout(()=>e.remove(),4200);}
+function fail(s){$('#errorMsg').textContent=s||'';if(s)toast(s,true)}
+const READ_BATCH=2<<20,MAX_CHUNK=64<<10,BUFFER_HIGH=8<<20,BUFFER_LOW=2<<20;
+const oldWebKit = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Safari/.test(navigator.userAgent)&&!/Chrome|Chromium|CriOS|FxiOS|Edg/.test(navigator.userAgent));
+const localChunkLimit=oldWebKit?16<<10:MAX_CHUNK;
+let remoteChunkLimit=16<<10;
+let peer=null,conn=null,dc=null,currentCode='',joining=false,connected=false;
+let incoming=null, currentJob=null, working=false, filter='all', completedCount=0, completedBytes=0, activeRate=0;
+let outbound=[],entries=[],ackWaiters=new Map();
+function setStatus(text,cls=''){const el=$('#connectionStatus');el.className='status '+cls;$('#statusText').textContent=text;$('#footerStatus').textContent=text;}
+function updateMetrics(){ $('#metricSpeed').textContent=activeRate>0?size(activeRate)+'/s':'—';$('#metricCount').textContent=String(completedCount);$('#metricBytes').textContent=size(completedBytes);$('#queueBadge').textContent=outbound.filter(j=>['queued','sending','paused'].includes(j.state)).length+' in queue'; }
+function setConnected(on){connected=on;$('#pairingControls').hidden=on;$('#connectedControls').hidden=!on;$('#dropzone').classList.toggle('disabled',!on);$('#dropzone').setAttribute('aria-disabled',String(!on));$('#browseBtn').disabled=!on;$('#messageInput').disabled=!on;$('#messageSend').disabled=!on;$('#dropHint').textContent=on?'Files transfer in the selected order · Pause or cancel anytime.':'Connect a device first to enable sharing.';$('#overviewHint').textContent=on?'Connected and ready for transfers.':'Your transfer stats appear here.';$('#network').classList.toggle('connected',on);$('#remoteDevice').classList.toggle('waiting',!on);if(!on){$('#network').classList.remove('sending','receiving');activeRate=0;updateMetrics();} }
+function showRemote(n,kind){$('#remoteName').textContent=n||'Connected device';$('#remoteIcon').innerHTML=ico(kind==='phone'?'phone':'monitor');$('#remoteHint').textContent=connected?'Connected device':'No device linked';}
+function showTab(tab){ $$('#pairTabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('#hostPane').hidden=tab!=='host';$('#joinPane').hidden=tab!=='join';fail('');if(tab==='join')joinCells[0]?.focus(); }
+$('#pairTabs').onclick=e=>{const b=e.target.closest('button');if(b)showTab(b.dataset.tab);};
+let hostCells=$$('#hostCode span');
+function showCode(code){hostCells.forEach((s,i)=>{s.textContent=code?.[i]||'–';s.classList.toggle('filled',!!code)});}
+const joinCells=Array.from({length:6},(_,i)=>{const e=document.createElement('input');e.inputMode='numeric';e.autocomplete='one-time-code';e.maxLength=1;e.setAttribute('aria-label','Code digit '+(i+1));e.addEventListener('input',()=>{e.value=e.value.replace(/\D/g,'').slice(-1);if(e.value&&i<5)joinCells[i+1].focus();if(joinCells.every(x=>x.value))joinDevices();});e.addEventListener('keydown',ev=>{if(ev.key==='Backspace'&&!e.value&&i)joinCells[i-1].focus();});e.addEventListener('paste',ev=>{const t=(ev.clipboardData?.getData('text')||'').replace(/\D/g,'').slice(0,6);if(t){ev.preventDefault();joinCells.forEach((c,k)=>c.value=t[k]||'');if(t.length===6)joinDevices();else joinCells[t.length].focus();}});$('#joinCode').append(e);return e;});
+function linkAvailable(){return /^https?:$/.test(location.protocol);}
+async function copyText(v){try{await navigator.clipboard.writeText(v);return true}catch{try{const ta=document.createElement('textarea');ta.value=v;ta.style.cssText='position:fixed;opacity:0;';document.body.append(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok;}catch{return false}}}
+$('#copyCodeBtn').onclick=async()=>toast(await copyText(currentCode)?'Pairing code copied':'Could not copy code');
+$('#copyLinkBtn').onclick=async()=>{if(!linkAvailable()){toast('Invite links require a hosted webpage',true);return;}const url=new URL(location.href);url.searchParams.set('join',currentCode);toast(await copyText(url.href)?'Invite link copied':'Could not copy link');};
+const PEER_OPTS={serialization:'raw',reliable:true};
+const peerId=c=>'dsl-'+c;
+function disposePeer(){try{conn?.close()}catch{}try{peer?.destroy()}catch{}peer=null;conn=null;dc=null;}
+function checkPeerJs(){if(typeof Peer!=='function'){fail('PeerJS failed to load. Check your internet or the CDN.');return false;}return true;}
+function host(){if(!checkPeerJs())return;disposePeer();joining=false;currentCode=String(Math.floor(100000+Math.random()*900000));showCode('');$('#createBtn').disabled=true;setStatus('Setting up…','working');const p=new Peer(peerId(currentCode));peer=p;p.on('open',()=>{if(peer!==p)return;showCode(currentCode);$('#createBtn').hidden=true;$('#copyCodeBtn').hidden=false;$('#copyLinkBtn').hidden=!linkAvailable();$('#waitLabel').hidden=false;$('#remoteDevice').classList.add('waiting');setStatus('Waiting for device','working');toast('Pairing code ready');});p.on('connection',c=>{if(conn&&conn.open){c.close();return;}attach(c);});p.on('error',e=>{if(peer!==p)return;if(e.type==='unavailable-id'){disposePeer();host();return;}$('#createBtn').disabled=false;$('#createBtn').hidden=false;$('#waitLabel').hidden=true;setStatus('Not connected');fail('Could not create session: '+(e.type||e.message||'network error'));});}
+$('#createBtn').onclick=host;
+async function joinDevices(){if(joining||connected)return;const code=joinCells.map(x=>x.value).join('');if(!/^\d{6}$/.test(code)){fail('Please enter all six digits.');return;}if(!checkPeerJs())return;disposePeer();joining=true;$('#joinLabel').hidden=false;$('#joinBtn').disabled=true;setStatus('Connecting…','working');const p=new Peer();peer=p;let settled=false;const timer=setTimeout(()=>{if(!settled&&peer===p){settled=true;joining=false;$('#joinLabel').hidden=true;$('#joinBtn').disabled=false;setStatus('Not connected');fail('Connection timed out. Check the code and your network.');disposePeer();}},22000);p.on('open',()=>{if(peer!==p||settled)return;const c=p.connect(peerId(code),PEER_OPTS);attach(c);c.on('open',()=>{settled=true;clearTimeout(timer);});c.on('error',()=>{if(peer===p&&!settled){settled=true;clearTimeout(timer);joinFailure('Device connection failed');}});});p.on('error',e=>{if(peer!==p)return;settled=true;clearTimeout(timer);joinFailure(e.type==='peer-unavailable'?'No device found for that code.':`Could not connect: ${e.type||'network error'}`);});}
+function joinFailure(msg){joining=false;$('#joinLabel').hidden=true;$('#joinBtn').disabled=false;setStatus('Not connected');fail(msg);disposePeer();}
+$('#joinBtn').onclick=joinDevices;
+function chunkSize(){const n=conn?.peerConnection?.sctp?.maxMessageSize;return Math.max(1024,Math.min(localChunkLimit,remoteChunkLimit,Number.isFinite(n)&&n>0?n:MAX_CHUNK));}
+function sendCtl(data){if(dc?.readyState==='open')dc.send(JSON.stringify(data));else throw Error('Connection is closed');}
+function waitForBuffer(){const channel=dc;return new Promise((resolve,reject)=>{let timer;const finish=(err)=>{channel.removeEventListener('bufferedamountlow',check);channel.removeEventListener('close',closed);clearInterval(timer);err?reject(err):resolve();};const closed=()=>finish(Error('Device disconnected'));const check=()=>{if(channel.readyState!=='open')return closed();if(channel.bufferedAmount<=BUFFER_LOW)finish();};channel.addEventListener('bufferedamountlow',check);channel.addEventListener('close',closed);timer=setInterval(check,90);check();});}
+async function waitForDrain(){while(dc?.bufferedAmount>0){if(dc?.readyState!=='open')throw Error('Device disconnected');await sleep(35);}if(dc?.readyState!=='open')throw Error('Device disconnected');}
+async function route(c){try{const pc=c.peerConnection;if(!pc?.getStats)return;const rpt=await pc.getStats();let pair=null;for(const s of rpt.values())if(s.type==='transport'&&s.selectedCandidatePairId)pair=rpt.get(s.selectedCandidatePairId);if(!pair)for(const s of rpt.values())if(s.type==='candidate-pair'&&s.state==='succeeded'&&(s.nominated||s.selected)){pair=s;break;}if(!pair||conn!==c||!connected)return;const a=rpt.get(pair.localCandidateId),b=rpt.get(pair.remoteCandidateId);if(!a?.candidateType||!b?.candidateType)return;const relayed=a.candidateType==='relay'||b.candidateType==='relay';const msg=relayed?'Relay connection · speed may vary':'Direct peer-to-peer connection';$('#routeDetail').textContent=msg;$('#connectionRoute').textContent='Transfer route: '+msg;setStatus(relayed?'Connected · Relay':'Connected · Direct','connected');}catch{}}
+function attach(c){conn=c;c.on('open',()=>{if(conn!==c)return;dc=c.dataChannel;dc.binaryType='arraybuffer';dc.bufferedAmountLowThreshold=BUFFER_LOW;remoteChunkLimit=16<<10;joining=false;$('#joinLabel').hidden=true;$('#joinBtn').disabled=false;$('#waitLabel').hidden=true;setConnected(true);setStatus('Connected','connected');$('#remoteHint').textContent='Connected device';sendCtl({t:'hello',name:me.name,kind:me.kind,maxChunk:localChunkLimit,version:2});toast('Devices connected. Ready to share!');setTimeout(()=>route(c),1700);});c.on('data',d=>onData(d));c.on('close',()=>{if(conn!==c)return;onDisconnect();});c.on('error',e=>{if(conn===c)toast('Connection problem: '+(e.type||'Unknown'),true);});}
+function onDisconnect(){connected=false;setConnected(false);setStatus('Disconnected');$('#remoteName').textContent='Waiting for peer';$('#remoteHint').textContent='Connection ended';$('#connectionRoute').textContent='Transfer route: disconnected';$('#routeDetail').textContent='Connection ended';$('#pairingControls').hidden=false;$('#createBtn').hidden=false;$('#createBtn').disabled=false;$('#copyCodeBtn').hidden=true;$('#copyLinkBtn').hidden=true;$('#waitLabel').hidden=true;$('#joinLabel').hidden=true;$('#joinBtn').disabled=false;showCode('');currentCode='';joining=false;for(const [key,w] of ackWaiters){clearTimeout(w.timer);w.reject(Error('Device disconnected'));}ackWaiters.clear();if(incoming){incoming.entry.bad('Connection lost before file finished');incoming=null;}outbound.forEach(j=>{if(['queued','sending','paused'].includes(j.state)){j.cancelled=true;j.state='failed';j.entry.bad('Connection lost');}});$('#network').classList.remove('sending','receiving');activeRate=0;updateMetrics();toast('Device disconnected',true);disposePeer();}
+$('#disconnectBtn').onclick=()=>{if(connected&&outbound.some(x=>['queued','sending','paused'].includes(x.state))&&!confirm('Disconnect and cancel unfinished transfers?'))return;disposePeer();onDisconnect();};
+$('#reloadBtn').onclick=()=>{if(connected&&outbound.some(x=>['queued','sending','paused'].includes(x.state))&&!confirm('Restart and cancel unfinished transfers?'))return;location.reload();};
+function addEntry(item){entries.unshift(item);renderFilter();updateMetrics();}
+function renderFilter(){let n=0;for(const en of entries){const show=filter==='all'||filter==='files'&&en.kind==='file'||filter==='messages'&&en.kind==='message';en.node.hidden=!show;if(show)n++;}const empty=$('#transferList .empty');if(empty)empty.remove();if(!n){const el=document.createElement('div');el.className='empty';el.innerHTML=`<div class="empty-graphic">${ico('file')}</div><strong>No ${filter==='all'?'transfers':filter} yet</strong><p>Items you send and receive will appear here.</p>`;$('#transferList').append(el);}else $('#transferList .empty')?.remove();}
+$('#filterTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;filter=b.dataset.filter;$$('#filterTabs button').forEach(el=>el.classList.toggle('active',el===b));renderFilter();};
+$('#clearBtn').onclick=()=>{for(const en of [...entries])if(en.done){en.node.remove();if(en.objectUrl)URL.revokeObjectURL(en.objectUrl);entries.splice(entries.indexOf(en),1);}renderFilter();toast('Finished activity cleared');};
+function makeEntry(name,dir,bytes,kind='file',type=''){const el=document.createElement('div');el.className='transfer';const pict=kind==='message'?'message':type.startsWith('image/')?'image':'file';const fileico=document.createElement('div');fileico.className='file-ico'+(pict!=='file'?' '+pict:'');fileico.innerHTML=ico(pict);const main=document.createElement('div');main.className='transfer-main';const top=document.createElement('div');top.className='filetop';const text=document.createElement('div');text.className='filename';text.textContent=name;const tag=document.createElement('span');tag.className='filetag';tag.textContent=dir==='out'?'Sending':'Receiving';top.append(text,tag);const details=document.createElement('div');details.className='filedetails';details.textContent=kind==='file'?`${dir==='out'?'↑ Outgoing':'↓ Incoming'} · ${size(bytes)} · Waiting`:`${dir==='out'?'↑ Sent':'↓ Received'} message`;const bar=document.createElement('div');bar.className='fileprogress';const fill=document.createElement('i');bar.append(fill);const bottom=document.createElement('div');bottom.className='filebottom';const pc=document.createElement('span');pc.className='percent';pc.textContent=kind==='file'?'0%':'';const actions=document.createElement('div');actions.className='fileactions';bottom.append(pc,actions);main.append(top,details);if(kind==='file')main.append(bar,bottom);else main.append(bottom);el.append(fileico,main);$('#transferList').prepend(el);const out={node:el,kind,done:false,objectUrl:null,actions,details,tag,fileico,bar,fill,pc,last:0,type,name,dir,bytes};addEntry(out);return Object.assign(out,{progress(b,txt,force=false){const t=performance.now();if(!force&&t-this.last<100)return;this.last=t;this.node.classList.add('running');this.fill.style.width=(this.bytes?Math.min(100,b/this.bytes*100):100).toFixed(2)+'%';this.pc.textContent=(this.bytes?Math.min(100,Math.round(b/this.bytes*100)):100)+'%';this.details.textContent=txt;this.tag.textContent=dir==='out'?'Sending':'Receiving';this.tag.className='filetag running';},status(s){this.details.textContent=s;},finish(txt,blob){this.node.classList.remove('running');this.done=true;this.fill.style.width='100%';this.pc.textContent='100%';this.details.textContent=txt;this.tag.className='filetag success';this.tag.textContent='Complete';this.actions.innerHTML='';if(blob){const url=URL.createObjectURL(blob);this.objectUrl=url;const a=document.createElement('a');a.className='action';a.href=url;a.download=this.name;a.innerHTML=ico('download')+' Save';this.actions.append(a);if(blob.type.startsWith('image/')){this.fileico.innerHTML='';this.fileico.style.backgroundImage=`url(${JSON.stringify(url).slice(1,-1)})`;}}},bad(txt){this.node.classList.remove('running');this.done=true;this.details.textContent=txt;this.tag.className='filetag failed';this.tag.textContent='Stopped';this.actions.innerHTML='';}});}
+function action(label,icon,cb,red=false){const b=document.createElement('button');b.type='button';b.className='action'+(red?' red':'');b.innerHTML=ico(icon)+' '+label;b.onclick=cb;return b;}
+function jobButtons(j){const a=j.entry.actions;a.innerHTML='';if(j.state==='queued'||j.state==='sending'||j.state==='paused'){if(j.state==='sending'||j.state==='paused'){a.append(action(j.state==='paused'?'Resume':'Pause',j.state==='paused'?'play':'pause',()=>{j.paused=!j.paused;j.state=j.paused?'paused':'sending';j.entry.node.classList.toggle('paused',j.paused);j.entry.tag.textContent=j.paused?'Paused':'Sending';j.entry.details.textContent=j.paused?'Paused · '+size(j.queued)+' queued':j.entry.details.textContent;jobButtons(j);}));}a.append(action('Cancel','x',()=>cancelJob(j),true));}}
+function queueFiles(files){if(!connected){toast('Connect to a device before sending files',true);return;}const accepted=Array.from(files||[]).filter(f=>f&&Number.isSafeInteger(f.size));for(const f of accepted){const j={id:id(),file:f,state:'queued',cancelled:false,paused:false,queued:0,t0:0,entry:makeEntry(f.name,'out',f.size,'file',f.type||'')};j.entry.status('↑ Outgoing · '+size(f.size)+' · In queue');outbound.push(j);jobButtons(j);}if(accepted.length)toast(accepted.length+' file'+(accepted.length===1?'':'s')+' added to queue');pump();updateMetrics();}
+function cancelJob(j){if(j.state==='done'||j.state==='failed'||j.state==='cancelled')return;j.cancelled=true;j.paused=false;if(j.state==='queued'){j.state='cancelled';j.entry.bad('Cancelled before sending');updateMetrics();}else{j.entry.status('Cancelling transfer…');jobButtons(j);}}
+async function pump(){if(working||!connected)return;working=true;try{while(connected){const j=outbound.find(x=>x.state==='queued'&&!x.cancelled);if(!j)break;await sendFile(j);}}finally{working=false;updateMetrics();}}
+function waitAck(fileId){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{ackWaiters.delete(fileId);reject(Error('Receiver did not confirm file completion'));},120000);ackWaiters.set(fileId,{resolve,reject,timer});});}
+async function sendFile(j){const f=j.file;j.state='sending';j.t0=performance.now();let ticker;const tick=()=>{if(dc?.readyState!=='open'||j.cancelled)return;const moved=Math.min(f.size,Math.max(0,j.queued-dc.bufferedAmount));const elapsed=Math.max(.2,(performance.now()-j.t0)/1000);const speed=moved/elapsed;activeRate=speed;const eta=speed>0?Math.ceil((f.size-moved)/speed):null;const desc=`↑ ${size(moved)} of ${size(f.size)} · ${size(speed)}/s${eta!==null?' · '+(eta<2?'Almost done':eta+'s left'):''}`;if(!j.paused)j.entry.progress(moved,desc);updateMetrics();};
+  $('#network').classList.add('sending');jobButtons(j);
+  try{sendCtl({t:'file-start',id:j.id,name:f.name,size:f.size,type:f.type});ticker=setInterval(tick,170);
+    for(let o=0;o<f.size;o+=READ_BATCH){if(j.cancelled)break;while(j.paused&&!j.cancelled&&connected)await sleep(80);if(j.cancelled)break;const slab=new Uint8Array(await f.slice(o,Math.min(f.size,o+READ_BATCH)).arrayBuffer());for(let i=0;i<slab.byteLength;){while(j.paused&&!j.cancelled&&connected)await sleep(80);if(j.cancelled)break;if(dc?.readyState!=='open')throw Error('Device disconnected');if(dc.bufferedAmount>=BUFFER_HIGH)await waitForBuffer();if(j.cancelled)break;let n=Math.min(chunkSize(),slab.byteLength-i);try{dc.send(slab.subarray(i,i+n));}catch(e){if(n<=16<<10||dc.readyState!=='open')throw e;remoteChunkLimit=Math.min(remoteChunkLimit,16<<10);n=Math.min(16<<10,slab.byteLength-i);dc.send(slab.subarray(i,i+n));}i+=n;j.queued+=n;}}
+    if(j.cancelled){if(dc?.readyState==='open')sendCtl({t:'file-cancel',id:j.id});j.state='cancelled';j.entry.bad('Cancelled by sender');return;}
+    // Reliable ordered WebRTC delivers file-end after every binary chunk.
+    const ack=waitAck(j.id);sendCtl({t:'file-end',id:j.id});await waitForDrain();await ack;
+    j.state='done';j.entry.finish('Sent · '+size(f.size)+' · '+size(f.size/Math.max(.001,(performance.now()-j.t0)/1000))+'/s');completedCount++;completedBytes+=f.size;toast('Sent: '+f.name);
+  }catch(e){if(j.state!=='cancelled'){j.state='failed';j.entry.bad('Failed: '+(e?.message||e));toast('Could not send '+f.name,true);if(dc?.readyState==='open'){try{sendCtl({t:'file-cancel',id:j.id})}catch{}}}}
+  finally{clearInterval(ticker);const w=ackWaiters.get(j.id);if(w){clearTimeout(w.timer);ackWaiters.delete(j.id);w.reject(Error('Transfer interrupted'));}j.entry.actions.innerHTML='';j.file=null;activeRate=0;$('#network').classList.remove('sending');updateMetrics();}
 }
-// Wait for the browser's outgoing buffer to clear. Poll fallback prevents missing a low-buffer event.
-function waitForBuffer() {
-  const channel = dc;
-  return new Promise((resolve, reject) => {
-    let timer;
-    function cleanup() {
-      channel.removeEventListener('bufferedamountlow', check);
-      channel.removeEventListener('close', closed);
-      clearInterval(timer);
-    }
-    function closed() { cleanup(); reject(new Error('Device disconnected during transfer')); }
-    function check() {
-      if (channel.readyState !== 'open') return closed();
-      if (channel.bufferedAmount <= BUFFER_LOW) { cleanup(); resolve(); }
-    }
-    channel.addEventListener('bufferedamountlow', check);
-    channel.addEventListener('close', closed);
-    timer = setInterval(check, 80);
-    check();
-  });
+function messageEntry(dir,message){const en=makeEntry(dir==='out'?'Message sent':'Message received',dir,0,'message');const body=document.createElement('p');body.className='msg-body';const chunks=message.split(/(https?:\/\/[^\s]+)/g);chunks.forEach((part,i)=>{if(i%2){const a=document.createElement('a');a.href=part;a.target='_blank';a.rel='noopener noreferrer';a.textContent=part;body.append(a);}else body.append(document.createTextNode(part));});en.node.querySelector('.transfer-main').append(body);en.done=true;en.tag.className='filetag success';en.tag.textContent=dir==='out'?'Sent':'Received';if(dir==='in')en.actions.append(action('Copy','copy',async()=>toast(await copyText(message)?'Message copied':'Could not copy message')));return en;}
+function sendMessage(){const v=$('#messageInput').value.trim();if(!v)return;if(!connected){toast('Connect a device first',true);return;}try{sendCtl({t:'text',text:v});messageEntry('out',v);$('#messageInput').value='';toast('Message sent');}catch(e){toast(e.message,true);}}
+$('#messageSend').onclick=sendMessage;$('#messageInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();sendMessage();}};
+function onData(data){if(typeof data!=='string'){if(!incoming)return;const arr=data instanceof Blob?null:data; // PeerJS normally delivers ArrayBuffer when serialization=raw.
+    if(!arr){data.arrayBuffer().then(b=>receiveBytes(b));}else receiveBytes(arr);return;}
+  let m;try{m=JSON.parse(data);}catch{return;}if(!m||!m.t)return;
+  if(m.t==='hello'){remoteChunkLimit=Number.isSafeInteger(m.maxChunk)&&m.maxChunk>=1024?Math.min(m.maxChunk,MAX_CHUNK):16<<10;showRemote(m.name,m.kind);}
+  else if(m.t==='file-start'){if(incoming){incoming.entry.bad('Overlapping transfer interrupted');incoming=null;}if(typeof m.name!=='string'||!Number.isSafeInteger(m.size)||m.size<0)return;const name=m.name.slice(0,512);const en=makeEntry(name,'in',m.size,'file',m.type||'');incoming={id:m.id,name,size:m.size,type:m.type||'',got:0,chunks:[],t0:performance.now(),entry:en};$('#network').classList.add('receiving');en.status('↓ Incoming · '+size(m.size)+' · Starting…');}
+  else if(m.t==='file-end'&&incoming&&m.id===incoming.id){const f=incoming;incoming=null;$('#network').classList.remove('receiving');if(f.got!==f.size){f.entry.bad(`Incomplete file · ${size(f.got)} of ${size(f.size)}`);return;}const blob=new Blob(f.chunks,{type:f.type||'application/octet-stream'});f.entry.finish('Received · '+size(blob.size),blob);completedCount++;completedBytes+=blob.size;activeRate=0;updateMetrics();try{sendCtl({t:'file-received',id:f.id})}catch{}if(autoload){const a=f.entry.actions.querySelector('a');if(a)try{a.click()}catch{}}toast('Received: '+f.name);}
+  else if(m.t==='file-received'){const w=ackWaiters.get(m.id);if(w){clearTimeout(w.timer);ackWaiters.delete(m.id);w.resolve();}}
+  else if(m.t==='file-cancel'){if(incoming&&incoming.id===m.id){incoming.entry.bad('Cancelled by sender');incoming=null;$('#network').classList.remove('receiving');activeRate=0;updateMetrics();}}
+  else if(m.t==='cancel-request'){const j=outbound.find(x=>x.id===m.id);if(j)cancelJob(j);}
+  else if(m.t==='text'&&typeof m.text==='string'){messageEntry('in',m.text.slice(0,20000));toast('New message received');}
 }
-async function waitForDrain() {
-  while (dc?.bufferedAmount > 0) {
-    if (dc.readyState !== 'open') throw new Error('Device disconnected during transfer');
-    await new Promise(resolve => setTimeout(resolve, 35));
-  }
-  if (dc?.readyState !== 'open') throw new Error('Device disconnected during transfer');
-}
-// Only label a connection Direct/Relay when browser stats positively identify its route.
-async function identifyRoute(c) {
-  try {
-    const pc = c.peerConnection;
-    if (!pc?.getStats) return;
-    const report = await pc.getStats();
-    let pair;
-    for (const stat of report.values()) {
-      if (stat.type === 'transport' && stat.selectedCandidatePairId) pair = report.get(stat.selectedCandidatePairId);
-    }
-    if (!pair) for (const stat of report.values()) {
-      if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && (stat.nominated || stat.selected)) { pair = stat; break; }
-    }
-    if (!pair || conn !== c || dc?.readyState !== 'open') return;
-    const local = report.get(pair.localCandidateId), remote = report.get(pair.remoteCandidateId);
-    if (!local?.candidateType || !remote?.candidateType) return;
-    const relay = local.candidateType === 'relay' || remote.candidateType === 'relay';
-    $('#pill').textContent = relay ? 'Connected · Relayed' : 'Connected · Direct';
-    $('#pill').title = relay ? 'Traffic is passing through a relay; speed may be lower.' : 'Devices have a direct WebRTC connection.';
-  } catch (_) { /* Connection stats are not implemented uniformly on all browsers. */ }
-}
-const size = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
-const fail = (m) => { $('#err').textContent = m || ''; };
-let peer, conn, dc, cur = null;
-
-$('#meOrb').innerHTML = IC[me.kind]; $('#peerOrb').innerHTML = IC.laptop; $('#meName').textContent = me.name;
-const stage = $('#stage'), beam = $('#beam');
-for (let n = 0; n < 4; n++) for (const k of ['o', 'i']) { const p = mk('span', 'pk ' + k); p.style.setProperty('--n', n); beam.append(p); }
-const fl = { out: 0, in: 0 };
-function flow(d, n) { fl[d] += n; stage.classList.toggle('f-out', fl.out > 0); stage.classList.toggle('f-in', fl.in > 0); }
-
-/* ---------- pairing UI ---------- */
-$('#seg').onclick = (e) => {
-  const b = e.target.closest('button'); if (!b) return; fail('');
-  $('#seg').dataset.t = b.dataset.t;
-  $('#seg').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-  $('#pHost').hidden = b.dataset.t !== 'host'; $('#pJoin').hidden = b.dataset.t !== 'join';
-  if (b.dataset.t === 'join') jin[0].focus();
-};
-const cells = [...Array(6)].map(() => { const s = mk('span', '', '·'); $('#digits').append(s); return s; });
-function showCode(code) { cells.forEach((s, i) => { s.innerHTML = ''; const b = mk('b', '', code[i]); b.style.setProperty('--i', i); s.append(b); }); }
-const jin = [...Array(6)].map((_, i) => {
-  const n = mk('input'); n.inputMode = 'numeric'; n.maxLength = 1; n.autocomplete = 'off'; n.ariaLabel = 'Digit ' + (i + 1);
-  $('#joinDigits').append(n);
-  n.oninput = () => { n.value = n.value.replace(/\D/g, ''); if (n.value && i < 5) jin[i + 1].focus(); if (jin.every((x) => x.value)) join(); };
-  n.onkeydown = (e) => { if (e.key === 'Backspace' && !n.value && i > 0) jin[i - 1].focus(); };
-  n.onpaste = (e) => {
-    const d = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6); if (!d) return;
-    e.preventDefault(); [...d].forEach((c, k) => (jin[k].value = c)); d.length === 6 ? join() : jin[d.length].focus();
-  };
-  return n;
-});
-
-/* ---------- connection ---------- */
-const OPTS = { serialization: 'raw', reliable: true }, ID = (c) => 'dsl-' + c;
-function waiting(on) { $('#peerNode').classList.toggle('wait', on); }
-function attach(c) {
-  conn = c;
-  c.on('open', () => {
-    dc = c.dataChannel; dc.binaryType = 'arraybuffer'; dc.bufferedAmountLowThreshold = BUFFER_LOW;
-    remoteChunkLimit = 16 << 10;
-    $('#pair').hidden = true; $('#app').hidden = false; waiting(false);
-    stage.classList.add('live', 'boom'); $('#peerNode').classList.remove('ghost');
-    $('#pill').textContent = 'Connected'; $('#pill').className = 'pill on';
-    $('#peerName').textContent = 'Device connected';
-    c.send(JSON.stringify({ t: 'hello', name: me.name, kind: me.kind, maxChunk: myChunkLimit }));
-    setTimeout(() => identifyRoute(c), 1800);
-  });
-  c.on('data', (d) => onMsg({ data: d }));
-  c.on('close', () => {
-    stage.classList.remove('live', 'f-out', 'f-in'); $('#peerNode').classList.add('ghost');
-    $('#pill').textContent = 'Disconnected. Tap to reload'; $('#pill').className = 'pill'; $('#pill').onclick = () => location.reload();
-  });
-  c.on('error', (e) => fail('Connection error: ' + e.type));
-}
-function host() {
-  const code = String(Math.floor(Math.random() * 900000) + 100000);
-  peer = new Peer(ID(code));
-  peer.on('open', () => { showCode(code); $('#bHost').hidden = true; $('#waiting').hidden = false; waiting(true); });
-  peer.on('connection', attach);
-  peer.on('error', (e) => { if (e.type === 'unavailable-id') { peer.destroy(); host(); } else fail('Could not reach the matchmaking service (' + e.type + '). Check your internet.'); });
-}
-$('#bHost').onclick = () => { fail(''); host(); };
-function join() {
-  const code = jin.map((x) => x.value).join(''); fail(''); $('#joining').hidden = false; waiting(true);
-  const reset = (m) => { fail(m); $('#joining').hidden = true; waiting(false); const g = $('#joinDigits'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake'); jin.forEach((x) => (x.value = '')); jin[0].focus(); };
-  peer = new Peer();
-  const timer = setTimeout(() => reset('Could not connect. The network may block device-to-device traffic.'), 20000);
-  peer.on('open', () => { const c = peer.connect(ID(code), OPTS); attach(c); c.on('open', () => clearTimeout(timer)); });
-  peer.on('error', (e) => { clearTimeout(timer); reset(e.type === 'peer-unavailable' ? 'No device found with that code. Check the digits.' : 'Could not reach the matchmaking service (' + e.type + ').'); });
-}
-
-/* ---------- activity cards ---------- */
-const rate = (t0, b, total) => { const s = Math.max(.001, (performance.now() - t0) / 1000), r = b / s, eta = r > 0 ? (total - b) / r : Infinity; return `${size(b)} of ${size(total)} · ${size(r)}/s · ${!Number.isFinite(eta) ? 'calculating…' : eta < 1 ? 'almost done' : Math.ceil(eta) + 's left'}`; };
-function thumb(ico, url) { ico.style.backgroundImage = `url(${url})`; ico.textContent = ''; }
-function item(dir, name, sz, imgUrl) {
-  const e = $('#log .empty'); if (e) e.remove();
-  const ext = (name.includes('.') ? name.split('.').pop() : 'file').slice(0, 4).toUpperCase();
-  let h = 0; for (const ch of ext) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  const r = mk('div', 'item ' + dir, '<div class="ico"></div><div class="meta"><div class="name"></div><div class="sub"></div><div class="bar"><i></i></div></div><div class="act"></div>');
-  const ico = r.querySelector('.ico'), sub = r.querySelector('.sub'), bar = r.querySelector('.bar i'), act = r.querySelector('.act');
-  ico.style.setProperty('--h', h); ico.textContent = ext; if (imgUrl) thumb(ico, imgUrl);
-  r.querySelector('.name').textContent = name; $('#log').prepend(r);
-  let last = 0;
-  return {
-    set(b, txt) { const t = performance.now(); if (t - last < 90) return; last = t; bar.style.width = (sz ? b / sz * 100 : 100) + '%'; sub.textContent = txt; },
-    done(txt, blob) {
-      r.classList.add('done'); bar.style.width = '100%'; sub.textContent = txt; act.innerHTML = IC.chk;
-      if (blob) { const a = mk('a', 'btn sm', 'Save'); a.href = URL.createObjectURL(blob); a.download = name; act.prepend(a); if (blob.type.startsWith('image/')) thumb(ico, a.href); }
-    },
-    bad(t) { r.classList.add('fail'); sub.textContent = t; },
-  };
-}
-function textItem(dir, text) {
-  const e = $('#log .empty'); if (e) e.remove();
-  const r = mk('div', 'item ' + dir, '<div class="ico" style="--h:200">Aa</div><div class="meta"><div class="sub"></div><p class="txt"></p></div><div class="act"></div>');
-  r.querySelector('.sub').textContent = dir === 'in' ? 'Message received' : 'Message sent';
-  const p = r.querySelector('.txt');
-  text.split(/(https?:\/\/[^\s]+)/g).forEach((part, i) => { if (i % 2) { const a = mk('a'); a.href = part; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = part; p.append(a); } else p.append(part); });
-  if (dir === 'in') { const b = mk('button', 'btn sm alt', 'Copy'); b.onclick = async () => { try { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; } catch {} }; r.querySelector('.act').append(b); }
-  else r.querySelector('.act').innerHTML = IC.chk;
-  $('#log').prepend(r);
-}
-
-/* ---------- receiving ---------- */
-function onMsg(ev) {
-  if (typeof ev.data !== 'string') {
-    if (!cur) return; cur.chunks.push(ev.data); cur.got += ev.data.byteLength;
-    cur.it.set(cur.got, rate(cur.t0, cur.got, cur.size)); return;
-  }
-  const m = JSON.parse(ev.data);
-  if (m.t === 'hello') { $('#peerName').textContent = m.name; $('#peerOrb').innerHTML = IC[m.kind] || IC.laptop;
-    if (Number.isSafeInteger(m.maxChunk) && m.maxChunk >= 1024) remoteChunkLimit = Math.min(m.maxChunk, MAX_CHUNK);
-  }
-  else if (m.t === 'file-start') { flow('in', 1); cur = { ...m, chunks: [], got: 0, t0: performance.now(), it: item('in', m.name, m.size) }; }
-  else if (m.t === 'file-end' && cur) {
-    const blob = new Blob(cur.chunks, { type: cur.type || 'application/octet-stream' });
-    cur.it.done('Received · ' + size(blob.size), blob); flow('in', -1); cur = null;
-  } else if (m.t === 'text') textItem('in', m.text);
-}
-
-/* ---------- optimized sending ---------- */
-// Serializing outgoing file batches also prevents overlapping file-start/file-end messages.
-let outgoingQueue = Promise.resolve();
-function queueFiles(files) {
-  if (!files.length) return;
-  outgoingQueue = outgoingQueue.then(() => sendFiles(files))
-    .catch(e => fail('Transfer error: ' + (e?.message || e)));
-}
-async function sendFiles(files) {
-  for (const f of files) {
-    const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
-    const it = item('out', f.name, f.size, preview), t0 = performance.now();
-    let queued = 0, ticker;
-    flow('out', 1);
-    try {
-      if (dc?.readyState !== 'open') throw new Error('Connect to a device before sending');
-      dc.send(JSON.stringify({ t: 'file-start', name: f.name, size: f.size, type: f.type }));
-      // Show estimated bytes already moved out of the browser queue (not merely queued).
-      const update = () => {
-        if (dc?.readyState !== 'open') return;
-        const moved = Math.max(0, Math.min(f.size, queued - dc.bufferedAmount));
-        it.set(moved, rate(t0, moved, f.size));
-      };
-      ticker = setInterval(update, 125);
-      for (let o = 0; o < f.size; o += READ_BATCH) {
-        // One read per 2 MiB rather than one read for every 16 KiB packet.
-        const slab = new Uint8Array(await f.slice(o, Math.min(f.size, o + READ_BATCH)).arrayBuffer());
-        for (let i = 0; i < slab.byteLength;) {
-          if (dc.readyState !== 'open') throw new Error('Device disconnected during transfer');
-          if (dc.bufferedAmount >= BUFFER_HIGH) await waitForBuffer();
-          let n = Math.min(chunkSize(), slab.byteLength - i);
-          try {
-            dc.send(slab.subarray(i, i + n));
-          } catch (e) {
-            // Retry a packet with the universally conservative size if a browser rejects it.
-            if (n <= 16 << 10 || dc.readyState !== 'open') throw e;
-            remoteChunkLimit = Math.min(remoteChunkLimit, 16 << 10);
-            n = Math.min(16 << 10, slab.byteLength - i);
-            dc.send(slab.subarray(i, i + n));
-          }
-          i += n;
-          queued += n;
-        }
-      }
-      dc.send(JSON.stringify({ t: 'file-end' }));
-      await waitForDrain();
-      it.done('Sent · ' + size(f.size) + ' · ' + size(f.size / Math.max(.001, (performance.now() - t0) / 1000)) + '/s');
-    } catch (e) {
-      it.bad('Failed: ' + (e?.message || e));
-    } finally {
-      clearInterval(ticker);
-      flow('out', -1);
-    }
-  }
-}
-$('#drop').onclick = () => $('#picker').click();
-$('#drop').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#picker').click(); } };
-$('#picker').onchange = (e) => { queueFiles([...e.target.files]); e.target.value = ''; };
-addEventListener('dragover', (e) => { e.preventDefault(); if (!$('#app').hidden) document.body.classList.add('dragging'); });
-addEventListener('dragleave', (e) => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
-addEventListener('drop', (e) => { e.preventDefault(); document.body.classList.remove('dragging'); if (!$('#app').hidden && e.dataTransfer.files.length) queueFiles([...e.dataTransfer.files]); });
-const sendText = () => { const v = $('#text').value.trim(); if (!v) return; dc.send(JSON.stringify({ t: 'text', text: v })); textItem('out', v); $('#text').value = ''; };
-$('#bText').onclick = sendText; $('#text').onkeydown = (e) => { if (e.key === 'Enter') sendText(); };
+function receiveBytes(buffer){if(!incoming)return;const n=buffer.byteLength||0;if(!n||incoming.got+n>incoming.size){incoming.entry.bad('Invalid or excess file data');incoming=null;$('#network').classList.remove('receiving');return;}incoming.chunks.push(buffer);incoming.got+=n;const elapsed=Math.max(.2,(performance.now()-incoming.t0)/1000);const speed=incoming.got/elapsed;activeRate=speed;const eta=speed>0?Math.ceil((incoming.size-incoming.got)/speed):null;incoming.entry.progress(incoming.got,`↓ ${size(incoming.got)} of ${size(incoming.size)} · ${size(speed)}/s${eta!==null?' · '+(eta<2?'Almost done':eta+'s left'):''}`);updateMetrics();}
+$('#dropzone').onclick=()=>{if(connected)$('#filePicker').click();else toast('Connect a device to start sharing',true);};
+$('#dropzone').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#dropzone').click();}};
+$('#browseBtn').onclick=()=>$('#filePicker').click();
+$('#filePicker').onchange=e=>{queueFiles(e.target.files);e.target.value='';};
+addEventListener('dragover',e=>{e.preventDefault();if(connected)document.body.classList.add('dragging');});
+addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging');});
+addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('dragging');if(connected&&e.dataTransfer.files.length)queueFiles(e.dataTransfer.files);});
+addEventListener('paste',e=>{if(!connected||e.target?.matches('input,textarea,[contenteditable]'))return;const list=Array.from(e.clipboardData?.files||[]);if(list.length){e.preventDefault();queueFiles(list);}});
+addEventListener('keydown',e=>{if(connected&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'&&!e.target.matches('input,textarea')){e.preventDefault();$('#filePicker').click();}});
+window.addEventListener('pagehide',()=>{for(const en of entries)if(en.objectUrl)URL.revokeObjectURL(en.objectUrl);});
+// Invite links work only when hosted on an http(s) site; a locally opened HTML file cannot be shared as a URL.
+const invitation=new URLSearchParams(location.search).get('join');if(/^\d{6}$/.test(invitation||'')){showTab('join');joinCells.forEach((el,i)=>el.value=invitation[i]);setTimeout(joinDevices,550);}
+setConnected(false);updateMetrics();
 </script>
 </body>
 </html>
